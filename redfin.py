@@ -1,9 +1,34 @@
 from bs4 import BeautifulSoup
 from urllib.request import Request, urlopen
-import numpy as np
 from tabulate import tabulate
+import numpy as np
 import re
 
+'''
+TODO
+- Unit Tests
+
+ADD THESE
+    TAX BENEFITS
+    Depreciation
+    Mortgage Interest
+
+    EQUITY ACCUMULATION
+    Property Value
+      less Mortgage Balance
+    EQUITY (WEALTH)
+    Plus Sales Proceeds if Final Year
+    Plus Accumulated Cash Flow
+    EFFECTIVE FUTURE VALUE
+
+    FINANCIAL PERFORMANCE
+    Capitalization (Cap) Rate
+    Cash on Cash Return (COC)
+    Return on Equity (ROE or COCE)
+    Annualized Return (APY)
+    Internal Rate of Return (IRR)
+    Return on Investment (ROI)
+'''
 
 class Unit():
 
@@ -22,15 +47,14 @@ class Property():
 
     def __init__(self, url):
         self.url = url
-        self.soup = self.get_url_info()
+        self.soup = self._get_url_info()
         self.price = int(self.soup.find(class_="statsValue").find_all("span")[1].text.replace(",",""))
         self.info = self.soup.find(class_="amenities-container").find_all(class_="entryItemContent")
         self._get_unit_info()
-
+        self.num_units = len(self.unit_object_list)
+        self.GRI = sum([i.rent for i in [n for n in self.unit_object_list]])
         self.vacancy = 0.07
-
-        # elif item_key == "Tax":
-        #     tax = round(float(item_value.replace("$","").replace(",","").replace(" ","")),2)
+        self.total_expenses = sum(filter(lambda x: isinstance(x,int) or isinstance(x,float),[n[1] for n in self.expenses()]))
 
     def _get_unit_info(self):
         self.unit_object_list = []
@@ -38,7 +62,7 @@ class Property():
         unit_info = dict()
 
         for n,elem in enumerate(self.soup(text=re.compile(r'(Unit) \d Information'))):
-            if n>0:
+            if n>0: # Here because parser is returining part of head for some reason, need to fix this
                 units.append(elem.parent.parent.parent.find_all(class_="entryItemContent"))
 
         for n,unit in enumerate(units):
@@ -52,7 +76,7 @@ class Property():
                     if item_key == "# of Units of Type":
                         unit_info[unit_num]["# of Units of Type"] = item_value
                     elif item_key == "Rent" or item_key == "Monthly Income":
-                        unit_info[unit_num]["rent"] = item_value.replace("$","").replace(",","").replace(" ","")
+                        unit_info[unit_num]["rent"] = int(item_value.replace("$","").replace(",","").replace(" ",""))
                     elif item_key== "# of Beds":
                         unit_info[unit_num]["beds"] = int(item_value)
                     elif item_key== "# of Baths" or item_key== "# of Baths (Full)":
@@ -80,122 +104,59 @@ class Property():
         return soup
 
     def pmt(self, interest=0.05, amortization=30, down_percent=0.2):
-        return(round(self.value*(1-down_percent)*(interest/12)/(1-(1+(interest/12))**(-amortization*12)),2))
+        return(round(1*self.price*(1-down_percent)*(interest/12)/(1-(1+(interest/12))**(-amortization*12)),2))
 
     def rent_roll(self):
         rent_roll = []
-        unit_num = 1
-        for n,unit in enumerate(rent):
-            if len(unit_types_count)>0:
-                for i in range(unit_types_count[n]):
-                    rent_roll.append([unit_num,unit,beds[n],baths[n],rooms[n]])
-                    unit_num+=1
-            else:
-                rent_roll.append([unit_num,unit])
-        return rent_roll
+        for n,unit in enumerate(self.unit_object_list):
+            # unit.__dict__.keys() Loop dynamically through attributes
+            rent_roll.append([n+1,unit.rent,unit.beds,unit.baths,unit.rooms,unit.sqft])
+        print(tabulate(rent_roll, headers=['Unit #', 'Rent/Month', 'Beds', 'Baths', 'Rooms', 'SqFt'], tablefmt='orgtbl'))
 
     def income_and_cashflows(self):
-        pass
+        top_line = [['GRI', self.GRI],
+                    ['Vacancy Allowance', -1*round(self.GRI*self.vacancy,2)],
+                    ['EGI', round(self.GRI*(1-self.vacancy),2)],
+                ]
+        expenses = list(map(lambda x:[x[0],x[1]*-1],[n for n in self.expenses()]))
+        bottom_line = [['Expenses', -1*self.total_expenses],
+                        ['NOI', round(self.GRI*(1-self.vacancy) - self.total_expenses,2)],
+                        ['PMT', -1*self.pmt()],
+                        ['OCF', round(self.GRI*(1-self.vacancy) - self.total_expenses - self.pmt(),2)],
+                ]
+
+        print(tabulate(top_line+expenses+bottom_line, headers=['Item', 'Amount/Month'],tablefmt='orgtbl'))
+
+    def expenses(self):
+        expenses = [
+            # Tax = round(float(item_value.replace("$","").replace(",","").replace(" ","")),2)
+            ["Maintenance Reserve",0.03*self.GRI],
+            # Management Fee = n * num-units * risk-factor
+            ["Insurance",50 * self.num_units * 1], # risk factor = 1
+            # Homeowners Assoc = from-source
+            ["Utilities",""],
+            # ["- Electricity",0], # tenant | unit-size * num-units
+            # ["- Gas",0], #tenant | unit-size * num-units
+            # Sewer = n * num-units | tenant
+            ["- Water",40 * self.num_units * 1], # unit scale factor = 1
+            ["- Scavenger",40 * self.num_units],
+            # ["- Fuel Oil",0],
+            # ["- Telephone",0],
+            # ["- Other",0],
+
+            # # Misc Expenses
+            # Accounting = n * self.num_units
+            # Advertising = n * self.num_units
+            # Janitorial Services = n * self.num_units
+            # Lawn/Snow = n * lot-size
+            # Legal = n * self.num_units
+            # Licenses = n * self.num_units
+            # Miscellaneous = n * self.num_units
+            # Resident Superintendent = n * self.num_units
+            # Supplies = n * self.num_units
+        ]
+
+        return expenses
 
 property = Property(url = "https://www.redfin.com/IL/Chicago/3227-S-Carpenter-St-60608/home/14075500")
-
-
-# Expenses
-# Maintenance_Reserve = 0.03
-# # Management Fee = n * num-units * risk-factor
-# Insurance = 50 * num_units * 1 # risk factor = 1
-# # Homeowners Assoc = from-source
-#
-# # Utilities
-#
-# Electricity = 0 # tenant | unit-size * num-units
-# Gas = 0 #tenant | unit-size * num-units
-# # Sewer = n * num-units | tenant
-# Water = 40 * num_units * 1 # unit scale factor = 1
-# Scavenger = 40
-# Fuel Oil
-# Telephone
-# Other
-
-# Misc Expenses
-
-# Accounting = n * num-units
-# Advertising = n * num-units
-# Janitorial Services = n * num-units
-# Lawn/Snow = n * lot-size
-# Legal = n * num-units
-# Licenses = n * num-units
-# Miscellaneous = n * num-units
-# Resident Superintendent = n * num-units
-# Supplies = n * num-units
-
-# line = ["----------------- ","----------------- "]
-# space = ["",""]
-#
-# # Rent Roll
-# print(tabulate(rent_roll(), headers=['Unit #', 'Rent/Month', 'Beds', 'Baths', 'SqFt', 'Rooms'],tablefmt='orgtbl'))
-#
-# Expenses = tax/12 + Insurance + GRI*Maintenance_Reserve + Water + Scavenger + Gas + Electricity
-#
-# # Income Statment and CashFlows
-# print(tabulate([
-#         ['GRI', GRI],
-#         ['Vacancy Allowance', -1*round(GRI*vacancy,2)],
-#         line,
-#         ['EGI', round(GRI*(1-vacancy),2)],
-#         space,
-#         ["Property Tax", -1*tax/12],
-#         ["Insurance", -1*Insurance],
-#         ["Maintenance Reserve", -1*GRI*Maintenance_Reserve],
-#         ["Management Fee",""],
-#         ["HOA",""],
-#         ["Utilities",""],
-#         ["- Sewer",""],
-#         ["- Water",-1*Water],
-#         ["- Scavenger",-1*Scavenger],
-#         ["- Gas",-1*Gas],
-#         ["- Electricity",-1*Electricity],
-#         ["- Fuel Oil",""],
-#         ["- Telephone",""],
-#         ["- Other",""],
-#         ["Misc Expenses",""],
-#         ["- Accounting",""],
-#         ["- Advertising",""],
-#         ["- Janitorial Services",""],
-#         ["- Lawn/Snow",""],
-#         ["- Legal",""],
-#         ["- Licenses",""],
-#         ["- Resident Superintendent",""],
-#         ["- Supplies",""],
-#         ["- Miscellaneous",""],
-#         space,
-#         ['Expenses', -1*Expenses],
-#         line,
-#         ['NOI', round(GRI*(1-vacancy) - Expenses,2)],
-#         space,
-#         ['PMT', -1*PMT(price,0.05,30)],
-#         line,
-#         ['OCF', round(GRI*(1-vacancy) - Expenses - PMT(price,0.05,30),2)],
-#     ], headers=['Item', 'Amount/Month'],tablefmt='orgtbl'))
-
-
-
-# TAX BENEFITS
-# Depreciation
-# Mortgage Interest
-#
-# EQUITY ACCUMULATION
-# Property Value
-#   less Mortgage Balance
-# EQUITY (WEALTH)
-# Plus Sales Proceeds if Final Year
-# Plus Accumulated Cash Flow
-# EFFECTIVE FUTURE VALUE
-#
-# FINANCIAL PERFORMANCE
-# Capitalization (Cap) Rate
-# Cash on Cash Return (COC)
-# Return on Equity (ROE or COCE)
-# Annualized Return (APY)
-# Internal Rate of Return (IRR)
-# Return on Investment (ROI)
+property.income_and_cashflows()
