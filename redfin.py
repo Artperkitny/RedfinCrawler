@@ -126,6 +126,7 @@ class Property():
                         ['NOI', self.GRI*(1-self.vacancy) - self.total_expenses],
                         ['PMT', -1*self.pmt()],
                         ['OCF', round(self.GRI*(1-self.vacancy) - self.total_expenses - self.pmt(),2)],
+                        ['Cap Rate', "{}%".format(round((self.GRI*(1-self.vacancy) - self.total_expenses)*12/self.price*100,2))],
                 ]
         if print_table:
             print(tabulate(top_line+expenses+bottom_line, headers=['Item', 'Amount/Month'],tablefmt='orgtbl'))
@@ -163,6 +164,6 @@ class Property():
 
         return expenses
 
-property = Property(url = "https://www.redfin.com/IL/Chicago/1522-W-18th-Pl-60608/home/14085247")
+property = Property(url = "https://www.redfin.com/IL/Chicago/3320-S-Carpenter-St-60608/home/14075245?utm_source=myredfin&utm_medium=email&utm_campaign=instant_listings_update&riftinfo=ZXY9ZW1haWwmbD0xMzcyNzczNSZwPWxpc3RpbmdfdXBkYXRlc19pbnN0YW50XzE1JnRzPTE1Mzg4NTIwMTg2MTMmYT1jbGljayZzPXNhdmVkX3NlYXJjaCZ0PWltYWdlJmVtYWlsX2lkPTEzNzI3NzM1XzE1Mzg4NTIwMTdfMiZ1cGRhdGVfdHlwZT0xJnNhdmVkX3NlYXJjaF9pZD0yNTM4MjEzMiZsaXN0aW5nX2lkPTkyODg3NTU4JnByb3BlcnR5X2lkPTE0MDc1MjQ1JnBvc2l0aW9uX251bWJlcj0w")
 property.rent_roll()
 property.income_and_cashflows()
